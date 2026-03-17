@@ -19,19 +19,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Notify - Pipeline Started
+        if: always()
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s 2>/dev/null || echo "N/A")
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an 2>/dev/null || echo "N/A")
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "🚀 *Pipeline Started*\n\n📦 *Repository:* ${GITHUB_REPOSITORY}\n🌿 *Branch:* ${GITHUB_REF_NAME}\n🔖 *Commit:* \`${SHORT_SHA}\` - ${COMMIT_MSG}\n👤 *Author:* ${COMMIT_AUTHOR}\n🔗 *Triggered by:* ${GITHUB_ACTOR}\n📋 *Event:* ${GITHUB_EVENT_NAME}\n🔗 [View Pipeline](${RUN_URL})"
+          }
+          EOF
+
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Determine image tag
         id: tag
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ -f VERSION ]; then
+            VERSION=$(cat VERSION | tr -d '[:space:]')
+            echo "Using VERSION file: ${VERSION}"
+            echo "tags=${IMAGE_NAME}:${VERSION}" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
-            echo "tags=${IMAGE_NAME}:${VERSION},${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+            echo "tags=${IMAGE_NAME}:${VERSION}" >> $GITHUB_OUTPUT
           else
             SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
-            echo "tags=${IMAGE_NAME}:${SHORT_SHA},${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+            echo "tags=${IMAGE_NAME}:${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Notify - Build Started
+        run: |
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "🔨 *Docker Build Started*\n\n📦 *Image:* \`${{ steps.tag.outputs.tags }}\`\n📄 *Dockerfile:* \`./source/Dockerfile\`\n🔗 [View Pipeline](${RUN_URL})"
+          }
+          EOF
 
       - name: Build Docker image
         run: |
@@ -42,6 +72,17 @@ jobs:
           done
           docker build $TAG_FLAGS -f ./source/Dockerfile ./source
 
+      - name: Notify - Build Completed
+        run: |
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "✅ *Docker Build Successful*\n\n📦 *Image:* \`${{ steps.tag.outputs.tags }}\`\n🔗 [View Pipeline](${RUN_URL})"
+          }
+          EOF
+
       - name: Push Docker image
         run: |
           IFS=',' read -ra TAG_ARRAY <<< "${{ steps.tag.outputs.tags }}"
@@ -49,6 +90,43 @@ jobs:
             docker push "$tag"
           done
 
+      - name: Notify - Push Completed
+        run: |
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "📤 *Docker Image Pushed Successfully*\n\n📦 *Image:* \`${{ steps.tag.outputs.tags }}\`\n🐳 *Registry:* Docker Hub\n🔗 [View on Docker Hub](https://hub.docker.com/r/${IMAGE_NAME})\n🔗 [View Pipeline](${RUN_URL})"
+          }
+          EOF
+
       - name: Logout from Docker Hub
         if: always()
         run: docker logout
+
+      - name: Notify - Pipeline Success
+        if: success()
+        run: |
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "🎉 *Pipeline Completed Successfully!*\n\n📦 *Repository:* ${GITHUB_REPOSITORY}\n🌿 *Branch:* ${GITHUB_REF_NAME}\n🔖 *Commit:* \`${SHORT_SHA}\`\n📦 *Image:* \`${{ steps.tag.outputs.tags }}\`\n⏱️ *Run #:* ${GITHUB_RUN_NUMBER}\n🔗 [View Pipeline](${RUN_URL})"
+          }
+          EOF
+
+      - name: Notify - Pipeline Failed
+        if: failure()
+        run: |
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "text": "❌ *Pipeline Failed!*\n\n📦 *Repository:* ${GITHUB_REPOSITORY}\n🌿 *Branch:* ${GITHUB_REF_NAME}\n🔖 *Commit:* \`${SHORT_SHA}\`\n👤 *Triggered by:* ${GITHUB_ACTOR}\n⏱️ *Run #:* ${GITHUB_RUN_NUMBER}\n🔗 [View Pipeline](${RUN_URL})\n\n⚠️ Please check the pipeline logs for details."
+          }
+          EOF

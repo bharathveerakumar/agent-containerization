@@ -1,0 +1,2 @@
+# Ignore the root-level install file (the one in source/ is used for Docker builds)
+/Site24x7MonitoringAgent.install

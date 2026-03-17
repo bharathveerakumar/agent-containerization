@@ -228,7 +228,8 @@ downloadAgent(){
       		  AGENT_VERSION=$CM_AGENT_VERSION
 		fi
 		DOMAIN=`domain_decider`
-		wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
+		#wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
+		cp /etc/site24x7-init-config/$INSTALL_FILE_NAME $INSTALL_DIR/$INSTALL_FILE_NAME
 		if [ $? = 0 ]; then
 			installAgent
 			break

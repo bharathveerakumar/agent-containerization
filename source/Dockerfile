@@ -18,7 +18,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py \
  && python3 get-pip.py --break-system-packages \
  && rm get-pip.py
 
-COPY ["s247_setup.sh", "entrypoint.sh", "requirements.txt", "heartbeat.sh", "./"]
+COPY ["s247_setup.sh", "entrypoint.sh", "requirements.txt", "heartbeat.sh", "Site24x7MonitoringAgent.install", "./"]
 
 RUN chmod +x entrypoint.sh && chmod +x s247_setup.sh && chmod +x heartbeat.sh
 
