@@ -1,0 +1,252 @@
+#!/bin/bash
+#Author : Arunagiriswaran E
+#Company : ZOHOCORP
+SUCCESS=0
+WARNING=1
+FAILURE=2
+BOOL_TRUE='True'
+BOOL_FALSE='False'
+
+ERROR_MSG=""
+SEVERE_FLAG=$BOOL_FALSE
+PRODUCT_NAME_UPPERCASE='SITE24X7'
+PRODUCT_NAME_LOWERCASE='site24x7'
+AGENT_VERSION=22007
+INSTALL_FILE_NAME=Site24x7MonitoringAgent.install
+ARCHIVE_AGENT_FILE_PATH=/$INSTALL_FILE_NAME
+
+
+if [ -z $KEY ]; then
+	SEVERE_FLAG=$BOOL_TRUE
+	ERROR_MSG="KEY not set as env variable!!!"
+fi
+
+if [[ -z $EKS_FARGATE && -z $GKE_AUTOPILOT && -z $SERVERLESS ]]; then
+    if [ ! -d /host/proc ]; then
+        SEVERE_FLAG=$BOOL_TRUE
+        ERROR_MSG="$ERROR_MSG /proc folder not mounted from host to /host/proc in container."
+    fi
+    if [ ! -d /host/sys ]; then
+        SEVERE_FLAG=$BOOL_TRUE
+        ERROR_MSG="$ERROR_MSG /sys folder not mounted from host to /host/sys in container."
+    fi
+fi
+
+if [ "$SEVERE_FLAG" == "$BOOL_TRUE" ]; then
+	printf "$ERROR_MSG Hence quitting!!! \n"
+	exit $FAILURE
+fi
+
+setupVenv(){
+	if [ ! -d $PRODUCT_HOME ]; then
+        mkdir $PRODUCT_HOME
+    fi
+	if [ ! -d $PRODUCT_HOME/venv ]; then
+		cp -r /etc/site24x7-init-config/venv $PRODUCT_HOME
+	fi
+}
+
+variableUpdate(){
+	PRODUCT_HOME=$INSTALL_DIR/$PRODUCT_NAME_LOWERCASE
+	MON_AGENT_NAME=monagent
+	PYTHON_VENV_HOME=$PRODUCT_HOME/venv
+	PYTHON_VENV_HOME_ACTIVATE=$PYTHON_VENV_HOME/bin/activate
+	PYTHON_VENV_BIN_PATH=$PYTHON_VENV_HOME/bin/python
+	PYTHON_VENV_PIP_PATH=$PYTHON_VENV_HOME/bin/pip
+	MON_AGENT_HOME=$PRODUCT_HOME/$MON_AGENT_NAME
+	MON_AGENT_BIN_DIR=$MON_AGENT_HOME/bin
+	MON_AGENT_LIB_DIR=$MON_AGENT_HOME/lib
+	MON_AGENT_LOG_DIR=$MON_AGENT_HOME/logs
+	MON_AGENT_PYPI_DIR=$MON_AGENT_HOME/pypi
+	MON_AGENT_LOG_DETAIL_DIR=$MON_AGENT_LOG_DIR/details
+	MON_AGENT_UNINSTALL_FILE=$MON_AGENT_BIN_DIR/uninstall
+	MON_AGENT_BIN_BOOT_SERVICE_FILE=$MON_AGENT_BIN_DIR/monagentservice
+	MON_AGENT_BIN_BOOT_FILE=$MON_AGENT_BIN_DIR/monagent
+	MON_AGENT_WATCHDOG_BIN_BOOT_FILE=$MON_AGENT_BIN_DIR/monagentwatchdog
+	MON_AGENT_BIN_PROFILE=$MON_AGENT_BIN_DIR/profile.sh
+	MON_AGENT_BIN_PROFILE_ENV=$MON_AGENT_BIN_DIR/profile.env.sh
+	MON_AGENT_PROFILE=$MON_AGENT_HOME/.profile
+	MON_AGENT_PROFILE_ENV=$MON_AGENT_HOME/.profile.env
+	MON_AGENT_CONF_DIR=$MON_AGENT_HOME/conf
+	MON_AGENT_CONF_FILE=$MON_AGENT_CONF_DIR/monagent.cfg
+	MON_AGENT_ERR_FILE=$MON_AGENT_LOG_DETAIL_DIR/monagent_err
+	MON_AGENT_WATCHDOG_ERR_FILE=$MON_AGENT_LOG_DETAIL_DIR/monagent_watchdog_err
+	BINARY_TAR_FILE=site24x7agent.tar.gz
+	MON_AGENT_INSTALL_LOG=$PRODUCT_HOME/site24x7install.log
+	MON_AGENT_CONTACT_SUPPORT_MESSAGE="Please contact support with $MON_AGENT_INSTALL_LOG , $MON_AGENT_LOG_DIR  and $MON_AGENT_LOG_DETAIL_DIR folder."
+	PRESENT_INIT_DAEMON_NAME=""
+	#user varaibles
+	MON_AGENT_GROUP=$PRODUCT_NAME_LOWERCASE'-group'
+	MON_AGENT_USER=$PRODUCT_NAME_LOWERCASE'-agent'
+	MON_AGENT_SUPERVISOR_CONF_FILE=$MON_AGENT_CONF_DIR/supervisor.conf
+	SUPERVISOR_CONFD_DIR=/etc/supervisor/conf.d
+	SUPERVISOR_CONFD_FILE=$SUPERVISOR_CONFD_DIR/site24x7-agent.conf
+	ALPINE_SUPERVISOR_CONFD_FILE=/etc/supervisor.d/site24x7-agent.ini
+	MON_AGENT_TEMP_FOLDER=$MON_AGENT_HOME/temp
+	UPGRADE_LOCK_FILE=$MON_AGENT_TEMP_FOLDER/upgrade-lock.txt
+}
+
+log(){
+	echo $(date +"%F %T.%N") "    $1" >> $MON_AGENT_INSTALL_LOG 2>&1
+}
+
+findAndReplace() {
+	log "FIND AND REPLACE : String : $1 File : $2"
+	sed -i "$1" "$2" 
+}
+
+domain_decider(){
+VALUE=`/usr/bin/python3 <<END
+import os
+domain_map_dict = {
+    "us": "https://staticdownloads.site24x7.com",
+    "eu": "https://staticdownloads.site24x7.eu",
+    "cn": "https://staticdownloads.site24x7.cn",
+    "au": "https://staticdownloads.site24x7.net.au",
+    "in": "https://staticdownloads.site24x7.in",
+    "gd": "https://staticdownloads.site24x7.com",
+    "jp": "https://staticdownloads.site24x7.jp",
+	"sa": "https://staticdownloads.site24x7.sa",
+    "in_hd": "https://staticdownloads.site24x7.in",
+	"ca": "https://staticdownloads.site24x7.ca",
+	"uk": "https://s247downloads.nimbuspop.com",
+	"ae": "https://s247downloads.nimbuspop.com",
+	"us_tc": "https://staticdownloads.site24x7.com"
+}
+domain = "https://staticdownloads.site24x7.com"
+if "KEY" in os.environ:
+        device_key = os.environ["KEY"]
+        prefix = '_'.join(device_key.split('_')[:-1])
+        if prefix in domain_map_dict.keys():
+                domain = domain_map_dict[prefix]
+print(domain)
+END`
+echo $VALUE
+}
+
+
+getEnvValues(){
+	local MAPPINGS=(
+		"KEY:key"
+		"PROXY:proxy"
+		"DN:dn"
+		"GN:gn"
+		"GROUP:gn"
+		"CT:ct"
+		"TP:tp"
+		"NP:np"
+		"RP:rp"
+		"INSTALLER:installer"
+		"TAGS:tags"
+		"HOST:host"
+		"AGENT_TYPE:agentType"
+		"SERVER:server"
+		"APPLICATIONS:applications"
+		"APPLOGS:applogs"
+		"PLUGINS:plugins"
+		"AUTOMATION:automation"
+		"APM_INSIGHT:apmInsight"
+		"PROCESS:process"
+		"MANAGEMENT_ACTIONS:managementActions"
+		"RESOURCE_CHECKS:resourceChecks"
+	)
+
+	INSTALL_PARAMS_ARRAY=("-i")
+
+	for mapping in "${MAPPINGS[@]}"; do
+		local ENV_KEY="${mapping%%:*}"
+		local PARAM="${mapping#*:}"
+		local ENV_VAL="${!ENV_KEY}"
+
+		# Push to array if variable exists and is non-empty
+		if [ -n "$ENV_VAL" ]; then
+			INSTALL_PARAMS_ARRAY+=("-$PARAM=$ENV_VAL")
+		fi
+	done
+}
+
+installAgent(){
+	if [ -v HOME ] && [ "$HOME" = "/root" ]; then
+		printf "\n\n ******** Installing the site24x7-agent as root ******** \n\n"
+		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -da -psw
+	else
+		printf "\n\n ******** Installing the site24x7-agent as Non root ******** \n\n"
+		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -nr="$INSTALL_DIR" -da -psw
+	fi
+}
+
+load_agent_version_from_configmap(){
+VALUE=`/usr/bin/python3 <<END
+try:
+    import requests, json,os
+    sa_path = '/var/run/secrets/kubernetes.io/serviceaccount'
+    bearer_token = ''
+    if os.path.exists(sa_path + '/token'):
+        with open(sa_path + '/token', 'r') as read_obj:
+            bearer_token = read_obj.read()
+            bearer_token = bearer_token.rstrip()
+
+    response = requests.get(
+        'https://kubernetes.default/api/v1/namespaces/$NAMESPACE/configmaps/site24x7', 
+        verify='{}/ca.crt'.format(sa_path),
+        headers={'Authorization' : 'Bearer ' + bearer_token},
+        timeout=30
+    )
+
+    if response.status_code == 200:
+        print(json.loads(response.content)['data']['NODE_AGENT_VERSION'])
+    else:
+        print($AGENT_VERSION)
+except Exception:
+    print($AGENT_VERSION)
+END`
+echo $VALUE
+}
+
+decideAgentType(){
+	if [[ -n ${BUILT_AGENT} ]]; then
+		INSTALL_FILE_NAME=Site24x7FullStackAgent_x64Linux.install
+		if [[ $(uname -m) == "arm64" || $(uname -m) == "aarch64" ]]; then
+			ARCHIVE_AGENT_FILE_PATH=/arm/$INSTALL_FILE_NAME
+		else
+			ARCHIVE_AGENT_FILE_PATH=/$INSTALL_FILE_NAME
+		fi
+	fi
+}
+
+downloadAgent(){
+	if [ -d $MON_AGENT_HOME ]; then
+		rm -rf $MON_AGENT_HOME
+	fi
+
+	x=1
+	while [ $x -le 60 ]
+	do
+		CM_AGENT_VERSION=`load_agent_version_from_configmap`
+		if [ $CM_AGENT_VERSION -gt $AGENT_VERSION ]; 
+		then
+      		  AGENT_VERSION=$CM_AGENT_VERSION
+		fi
+		DOMAIN=`domain_decider`
+		wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
+		if [ $? = 0 ]; then
+			installAgent
+			break
+		fi
+		x=$(( $x+1 ))
+		printf "Not able to download Site24x7 Agent Installer - Retry after 1 minute \n"
+		sleep 60
+	done
+}
+
+INSTALL_DIR="/opt"
+variableUpdate
+setupVenv
+getEnvValues
+decideAgentType
+downloadAgent
+mkdir $MON_AGENT_HOME/tmp
+
+
+
+exec "$@"

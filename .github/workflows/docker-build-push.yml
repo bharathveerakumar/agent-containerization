@@ -1,0 +1,54 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: bharathveerakumar/site24x7-agent
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "tags=${IMAGE_NAME}:${VERSION},${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+            echo "tags=${IMAGE_NAME}:${SHORT_SHA},${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Docker image
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.tag.outputs.tags }}"
+          TAG_FLAGS=""
+          for tag in "${TAG_ARRAY[@]}"; do
+            TAG_FLAGS="$TAG_FLAGS -t $tag"
+          done
+          docker build $TAG_FLAGS -f ./source/Dockerfile ./source
+
+      - name: Push Docker image
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.tag.outputs.tags }}"
+          for tag in "${TAG_ARRAY[@]}"; do
+            docker push "$tag"
+          done
+
+      - name: Logout from Docker Hub
+        if: always()
+        run: docker logout
