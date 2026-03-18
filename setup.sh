@@ -14,51 +14,35 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/source"
 INSTALL_FILE="Site24x7MonitoringAgent.install"
-read -p "Enter the download URL for Site24x7MonitoringAgent.install (e.g., https://staticdownloads.site24x7.com/server/Site24x7MonitoringAgent.install): " DOWNLOAD_URL
 VERSION_FILE="$SCRIPT_DIR/VERSION"
-
-# Load .env variables if .env file exists
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    echo "Loading credentials from .env file..."
-    set -a # automatically export all variables
-    . "$SCRIPT_DIR/.env"
-    set +a
-    if [ -z "$user" ] || [ -z "$password" ]; then
-        echo "WARNING: 'user' or 'password' variables in .env are empty. Proceeding without authentication."
-        AUTH_ARGS=""
-        CURL_AUTH=""
-    else
-        AUTH_ARGS="--user \"$user\" --password \"$password\""
-        CURL_AUTH="-u \"$user:$password\""
-    fi
-else
-    echo "No .env file found. Proceeding without authentication for download."
-    AUTH_ARGS=""
-    CURL_AUTH=""
-fi
 
 echo "============================================"
 echo "  Site24x7 Agent Containerization - Setup"
 echo "============================================"
 echo ""
 
-# Step 1: Download the Site24x7MonitoringAgent.install
-echo "[1/3] Downloading $INSTALL_FILE ..."
-if command -v wget &> /dev/null; then
-    wget -O "$SOURCE_DIR/$INSTALL_FILE" "$DOWNLOAD_URL" --no-check-certificate $AUTH_ARGS
-elif command -v curl &> /dev/null; then
-    curl -fSL $CURL_AUTH -o "$SOURCE_DIR/$INSTALL_FILE" "$DOWNLOAD_URL"
-else
-    echo "ERROR: Neither wget nor curl is available. Please install one of them."
+# Step 1: Copy the Site24x7MonitoringAgent.install from local downloads
+echo "[1/3] Copying $INSTALL_FILE from local download folder ..."
+
+DEFAULT_DOWNLOAD_PATH="$HOME/Downloads"
+read -p "Enter the path to the folder containing $INSTALL_FILE (default: $DEFAULT_DOWNLOAD_PATH): " DOWNLOAD_FOLDER_PATH
+DOWNLOAD_FOLDER_PATH="${DOWNLOAD_FOLDER_PATH:-$DEFAULT_DOWNLOAD_PATH}"
+
+LOCAL_INSTALLER_PATH="$DOWNLOAD_FOLDER_PATH/$INSTALL_FILE"
+
+if [ ! -f "$LOCAL_INSTALLER_PATH" ]; then
+    echo "ERROR: $INSTALL_FILE not found at $LOCAL_INSTALLER_PATH"
     exit 1
 fi
+
+cp "$LOCAL_INSTALLER_PATH" "$SOURCE_DIR/$INSTALL_FILE"
 
 if [ ! -f "$SOURCE_DIR/$INSTALL_FILE" ]; then
-    echo "ERROR: Failed to download $INSTALL_FILE"
+    echo "ERROR: Failed to copy $INSTALL_FILE to $SOURCE_DIR/"
     exit 1
 fi
 
-echo "Downloaded $INSTALL_FILE to $SOURCE_DIR/"
+echo "Copied $INSTALL_FILE to $SOURCE_DIR/"
 echo ""
 
 # Step 2: Ask user for the image tag
