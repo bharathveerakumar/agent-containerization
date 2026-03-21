@@ -11,7 +11,7 @@ ERROR_MSG=""
 SEVERE_FLAG=$BOOL_FALSE
 PRODUCT_NAME_UPPERCASE='SITE24X7'
 PRODUCT_NAME_LOWERCASE='site24x7'
-AGENT_VERSION=22007
+AGENT_VERSION=22100
 INSTALL_FILE_NAME=Site24x7MonitoringAgent.install
 ARCHIVE_AGENT_FILE_PATH=/$INSTALL_FILE_NAME
 
@@ -228,8 +228,8 @@ downloadAgent(){
       		  AGENT_VERSION=$CM_AGENT_VERSION
 		fi
 		DOMAIN=`domain_decider`
-		#wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
-		cp /etc/site24x7-init-config/$INSTALL_FILE_NAME $INSTALL_DIR/$INSTALL_FILE_NAME
+		wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
+		#cp /etc/site24x7-init-config/$INSTALL_FILE_NAME $INSTALL_DIR/$INSTALL_FILE_NAME
 		if [ $? = 0 ]; then
 			installAgent
 			break
