@@ -4,7 +4,7 @@
 #
 # This script is meant to be run on the user's local machine (NOT in CI).
 # It will:
-#   1. Download the Site24x7MonitoringAgent.install file into source/
+#   1. Copy the Site24x7MonitoringAgent.install and Site24x7FullStackAgent_x64Linux.install files into source/
 #   2. Ask the user for an image TAG and persist it in a VERSION file
 #   3. Commit and push all changes to GitHub, triggering the CI workflow
 #
@@ -14,6 +14,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/source"
 INSTALL_FILE="Site24x7MonitoringAgent.install"
+FULLSTACK_INSTALL_FILE="Site24x7FullStackAgent_x64Linux.install"
 VERSION_FILE="$SCRIPT_DIR/VERSION"
 
 echo "============================================"
@@ -21,13 +22,14 @@ echo "  Site24x7 Agent Containerization - Setup"
 echo "============================================"
 echo ""
 
-# Step 1: Copy the Site24x7MonitoringAgent.install from local downloads
-echo "[1/3] Copying $INSTALL_FILE from local download folder ..."
+# Step 1: Copy installer files from local downloads
+echo "[1/3] Copying installer files from local download folder ..."
 
 DEFAULT_DOWNLOAD_PATH="$HOME/Downloads"
-read -p "Enter the path to the folder containing $INSTALL_FILE (default: $DEFAULT_DOWNLOAD_PATH): " DOWNLOAD_FOLDER_PATH
+read -p "Enter the path to the folder containing installer files (default: $DEFAULT_DOWNLOAD_PATH): " DOWNLOAD_FOLDER_PATH
 DOWNLOAD_FOLDER_PATH="${DOWNLOAD_FOLDER_PATH:-$DEFAULT_DOWNLOAD_PATH}"
 
+# Copy Site24x7MonitoringAgent.install
 LOCAL_INSTALLER_PATH="$DOWNLOAD_FOLDER_PATH/$INSTALL_FILE"
 
 if [ ! -f "$LOCAL_INSTALLER_PATH" ]; then
@@ -43,6 +45,23 @@ if [ ! -f "$SOURCE_DIR/$INSTALL_FILE" ]; then
 fi
 
 echo "Copied $INSTALL_FILE to $SOURCE_DIR/"
+
+# Copy Site24x7FullStackAgent_x64Linux.install
+LOCAL_FULLSTACK_PATH="$DOWNLOAD_FOLDER_PATH/$FULLSTACK_INSTALL_FILE"
+
+if [ ! -f "$LOCAL_FULLSTACK_PATH" ]; then
+    echo "ERROR: $FULLSTACK_INSTALL_FILE not found at $LOCAL_FULLSTACK_PATH"
+    exit 1
+fi
+
+cp "$LOCAL_FULLSTACK_PATH" "$SOURCE_DIR/$FULLSTACK_INSTALL_FILE"
+
+if [ ! -f "$SOURCE_DIR/$FULLSTACK_INSTALL_FILE" ]; then
+    echo "ERROR: Failed to copy $FULLSTACK_INSTALL_FILE to $SOURCE_DIR/"
+    exit 1
+fi
+
+echo "Copied $FULLSTACK_INSTALL_FILE to $SOURCE_DIR/"
 echo ""
 
 # Step 2: Ask user for the image tag
@@ -70,6 +89,7 @@ cd "$SCRIPT_DIR"
 
 # Stage the relevant files
 git add "$SOURCE_DIR/$INSTALL_FILE"
+git add "$SOURCE_DIR/$FULLSTACK_INSTALL_FILE"
 git add "$VERSION_FILE"
 git add -A
 
@@ -84,7 +104,7 @@ if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
     exit 0
 fi
 
-git commit -m "Update agent installer and set image tag to $IMAGE_TAG"
+git commit -m "Update agent installers and set image tag to $IMAGE_TAG"
 git push origin main
 
 echo ""
