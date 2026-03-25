@@ -168,7 +168,7 @@ getEnvValues(){
 installAgent(){
 	if [ -v HOME ] && [ "$HOME" = "/root" ]; then
 		printf "\n\n ******** Installing the site24x7-agent as root ******** \n\n"
-		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -da -psw
+		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -ebpf=true -da -psw
 	else
 		printf "\n\n ******** Installing the site24x7-agent as Non root ******** \n\n"
 		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -nr="$INSTALL_DIR" -da -psw
@@ -228,8 +228,8 @@ downloadAgent(){
       		  AGENT_VERSION=$CM_AGENT_VERSION
 		fi
 		DOMAIN=`domain_decider`
-		#wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
-		cp /etc/site24x7-init-config/$INSTALL_FILE_NAME $INSTALL_DIR/$INSTALL_FILE_NAME
+		wget -O $INSTALL_DIR/$INSTALL_FILE_NAME $DOMAIN/server/archive/linux/$AGENT_VERSION$ARCHIVE_AGENT_FILE_PATH --no-check-certificate --no-cache --no-cookies
+		#cp /etc/site24x7-init-config/$INSTALL_FILE_NAME $INSTALL_DIR/$INSTALL_FILE_NAME
 		if [ $? = 0 ]; then
 			installAgent
 			break
