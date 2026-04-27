@@ -139,16 +139,16 @@ getEnvValues(){
 		"INSTALLER:installer"
 		"TAGS:tags"
 		"HOST:host"
-		"AGENT_TYPE:agentType"
+		"AGENT_TYPE:agent_type"
 		"SERVER:server"
 		"APPLICATIONS:applications"
 		"APPLOGS:applogs"
 		"PLUGINS:plugins"
 		"AUTOMATION:automation"
-		"APM_INSIGHT:apmInsight"
+		"APM_INSIGHT:apm_insight"
 		"PROCESS:process"
-		"MANAGEMENT_ACTIONS:managementActions"
-		"RESOURCE_CHECKS:resourceChecks"
+		"MANAGEMENT_ACTIONS:management_actions"
+		"RESOURCE_CHECKS:resource_checks"
 	)
 
 	INSTALL_PARAMS_ARRAY=("-i")
