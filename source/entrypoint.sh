@@ -166,6 +166,7 @@ getEnvValues(){
 }
 
 installAgent(){
+	echo ${INSTALL_PARAMS_ARRAY[@]}
 	if [ -v HOME ] && [ "$HOME" = "/root" ]; then
 		printf "\n\n ******** Installing the site24x7-agent as root ******** \n\n"
 		bash $INSTALL_DIR/$INSTALL_FILE_NAME "${INSTALL_PARAMS_ARRAY[@]}" -ebpf=true -da -psw
